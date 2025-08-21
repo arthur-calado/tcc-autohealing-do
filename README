@@ -1,0 +1,13 @@
+# Pré-requisito: Instalar Terraform
+
+Para utilizar este projeto, é necessário ter o Terraform instalado em sua máquina.
+
+## Instalação do Terraform
+
+1. Acesse o site oficial: https://www.terraform.io/downloads.html
+2. Baixe o pacote adequado para seu sistema operacional.
+3. Extraia o arquivo baixado e mova o binário `terraform` para um diretório presente no seu PATH (ex: `/usr/local/bin`).
+
+### Verificando a instalação
+
+Execute o comando abaixo para verificar se o Terraform foi instalado corretamente:
