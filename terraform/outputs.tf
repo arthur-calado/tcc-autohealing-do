@@ -27,3 +27,8 @@ output "vpc_cidr" {
   value       = digitalocean_vpc.tcc_vpc.ip_range
   description = "Faixa de rede privada (CIDR) do VPC custom"
 }
+
+output "monitoring_ip" {
+  value       = digitalocean_droplet.monitoring.ipv4_address
+  description = "IP público do Droplet de Monitoramento"
+}

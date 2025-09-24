@@ -3,7 +3,7 @@ resource "digitalocean_tag" "db" {
   name = "${var.project_name}-db"
 }
 
-# 🔹 Tag para os webservers
+# 🔹 Tag para os webservers (já existia e será aproveitada)
 resource "digitalocean_tag" "web" {
   name = "${var.project_name}-web"
 }
@@ -18,7 +18,7 @@ resource "random_string" "suffix" {
 resource "digitalocean_vpc" "tcc_vpc" {
   name     = "${var.project_name}-vpc-${random_string.suffix.result}"
   region   = var.region
-  ip_range = "10.10.0.0/16"   # range custom, evita confusão com default
+  ip_range = "10.10.0.0/16"
   lifecycle {
     create_before_destroy = true
   }
@@ -30,10 +30,10 @@ resource "digitalocean_droplet" "db" {
   region   = var.region
   size     = var.db_size
   image    = var.image
-  vpc_uuid = digitalocean_vpc.tcc_vpc.id   # <── sempre no VPC custom
+  vpc_uuid = digitalocean_vpc.tcc_vpc.id
   ipv6     = false
   ssh_keys = var.ssh_keys
-  tags     = [digitalocean_tag.db.id]
+  tags     = [digitalocean_tag.db.name] # Corrigido para .name para consistência
 
   user_data = file("${path.module}/user_data_db.sh")
 }
@@ -45,10 +45,10 @@ resource "digitalocean_droplet" "web" {
   region   = var.region
   size     = var.web_size
   image    = var.image
-  vpc_uuid = digitalocean_vpc.tcc_vpc.id   # <── sempre no VPC custom
+  vpc_uuid = digitalocean_vpc.tcc_vpc.id
   ipv6     = false
   ssh_keys = var.ssh_keys
-  tags     = [digitalocean_tag.web.id]
+  tags     = [digitalocean_tag.web.name] # <-- Apenas uma linha de tags, e usando .name
 
   user_data = templatefile("${path.module}/user_data_web.sh", {
     db_host = digitalocean_droplet.db.ipv4_address_private
@@ -59,7 +59,7 @@ resource "digitalocean_droplet" "web" {
 resource "digitalocean_loadbalancer" "lb" {
   name     = "${var.project_name}-lb"
   region   = var.region
-  vpc_uuid = digitalocean_vpc.tcc_vpc.id   # <── sempre no VPC custom
+  vpc_uuid = digitalocean_vpc.tcc_vpc.id
 
   redirect_http_to_https = false
 
