@@ -4,7 +4,7 @@ exec > /var/log/user_data_output.log 2>&1
 
 set -e
 
-echo "--- Starting user_data script (Final version with YAML fix) ---"
+echo "--- Starting user_data script (Final version with correct token injection) ---"
 
 # --- 1. INSTALL DEPENDENCIES ---
 echo "Waiting and updating packages..."
@@ -19,6 +19,7 @@ mkdir -p /opt/monitoring
 
 # --- prometheus.yml ---
 echo "Creating /opt/monitoring/prometheus.yml with authentication..."
+# CORRECAO FINAL: Usamos <<EOF (sem aspas) para permitir a expansao da variavel ${do_token}
 cat <<EOF > /opt/monitoring/prometheus.yml
 global:
   scrape_interval: 15s
@@ -39,12 +40,11 @@ scrape_configs:
         action: keep
       - source_labels: [__meta_digitalocean_private_ip]
         target_label: __address__
+        # CORRECAO: Escapamos o $1 para que seja interpretado pelo Prometheus e nao pelo shell
         replacement: '\${1}:8080'
 EOF
 
-# --- rules.yml ---
-# A CORRECAO FINAL ESTA AQUI:
-echo "Creating /opt/monitoring/rules.yml..."
+# --- rules.yml (sem mudancas) ---
 cat <<'EOF' > /opt/monitoring/rules.yml
 groups:
   - name: TCCAlerts
@@ -55,11 +55,10 @@ groups:
         labels:
           severity: critical
         annotations:
-          # A barra invertida (\) foi REMOVIDA. O 'EOF' com aspas já protege o '$'.
-          summary: "Aplicacao TCC Web esta offline em {{ $labels.instance }}"
+          summary: "Aplicacao TCC Web esta offline em {{ \$labels.instance }}"
 EOF
 
-# --- alertmanager.yml ---
+# --- alertmanager.yml (sem mudancas) ---
 cat <<'EOF' > /opt/monitoring/alertmanager.yml
 route:
   receiver: 'webhook-healer'
@@ -69,7 +68,7 @@ receivers:
       - url: 'http://healer:5001/webhook'
 EOF
 
-# --- healer.py ---
+# --- healer.py (sem mudancas) ---
 cat <<'EOF' > /opt/monitoring/healer.py
 from flask import Flask, request, jsonify
 import subprocess, os, logging, threading
@@ -111,13 +110,13 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
 EOF
 
-# --- .env file ---
+# --- .env file (sem mudancas) ---
 echo "Creating environment file /opt/monitoring/.env..."
 cat <<EOF > /opt/monitoring/.env
 DO_TOKEN=${do_token}
 EOF
 
-# --- docker-compose.yml ---
+# --- docker-compose.yml (sem mudancas) ---
 echo "Creating /opt/monitoring/docker-compose.yml (using Quay.io mirror)..."
 cat <<'EOF' > /opt/monitoring/docker-compose.yml
 version: '3.7'
