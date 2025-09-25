@@ -146,7 +146,7 @@ EOF
 
 # --- 3. EXECUÇÃO DOS SERVIÇOS ---
 # Clona o seu projeto do GitHub
-git clone https://github.com/arthur-calado/tcc-autohealing-do/tree/inserting-prometheus /opt/terraform_project
+git clone -b inserting-prometheus https://github.com/arthur-calado/tcc-autohealing-do.git /opt/terraform_project
 
 # Inicia os serviços do Docker em background
 systemctl enable --now docker
