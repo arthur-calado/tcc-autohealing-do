@@ -1,0 +1,10 @@
+groups:
+  - name: TCCAlerts
+    rules:
+      - alert: TccWebAppDown
+        expr: up{job="tcc-web"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aplicacao TCC Web esta offline em {{ $labels.instance }}"

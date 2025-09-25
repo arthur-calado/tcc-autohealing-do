@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+rule_files:
+  - /etc/prometheus/rules.yml
+scrape_configs:
+  - job_name: 'tcc-web'
+    digitalocean_sd_configs:
+      - port: 8080
+        bearer_token: '${do_token}'
+    relabel_configs:
+      - source_labels: [__meta_digitalocean_tags]
+        regex: '.*,tcc-autohealing-web,.*'
+        action: keep
+      - source_labels: [__meta_digitalocean_private_ip]
+        target_label: __address__
+        replacement: '${1}:8080'

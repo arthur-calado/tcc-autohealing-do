@@ -1,64 +1,34 @@
 #!/bin/bash
-# Redireciona toda a saida (stdout e stderr) para um ficheiro de log para depuracao
 exec > /var/log/user_data_output.log 2>&1
-
 set -e
 
-echo "--- Starting user_data script (Final version with correct token injection) ---"
+echo "--- Starting user_data script (Final Template-Based Version) ---"
 
 # --- 1. INSTALL DEPENDENCIES ---
-echo "Waiting and updating packages..."
+echo "Updating packages and installing dependencies..."
 sleep 15
 apt-get update -y
-echo "Installing Docker, Docker Compose, and Git..."
 apt-get install -y docker.io docker-compose git
 
 # --- 2. CREATE CONFIGURATION FILES ---
 echo "Creating config directory /opt/monitoring..."
 mkdir -p /opt/monitoring
 
-# --- prometheus.yml ---
-echo "Creating /opt/monitoring/prometheus.yml with authentication..."
-# CORRECAO FINAL: Usamos <<EOF (sem aspas) para permitir a expansao da variavel ${do_token}
+# AQUI ESTA A MUDANCA:
+# Escrevemos o conteúdo que o Terraform já preparou para nós.
+# Isto evita TODOS os erros de sintaxe do shell.
+echo "Creating /opt/monitoring/prometheus.yml..."
 cat <<EOF > /opt/monitoring/prometheus.yml
-global:
-  scrape_interval: 15s
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets: ['alertmanager:9093']
-rule_files:
-  - /etc/prometheus/rules.yml
-scrape_configs:
-  - job_name: 'tcc-web'
-    digitalocean_sd_configs:
-      - port: 8080
-        bearer_token: '${do_token}'
-    relabel_configs:
-      - source_labels: [__meta_digitalocean_tags]
-        regex: '.*,tcc-autohealing-web,.*'
-        action: keep
-      - source_labels: [__meta_digitalocean_private_ip]
-        target_label: __address__
-        # CORRECAO: Escapamos o $1 para que seja interpretado pelo Prometheus e nao pelo shell
-        replacement: '\${1}:8080'
+${prometheus_config}
 EOF
 
-# --- rules.yml (sem mudancas) ---
-cat <<'EOF' > /opt/monitoring/rules.yml
-groups:
-  - name: TCCAlerts
-    rules:
-      - alert: TccWebAppDown
-        expr: up{job="tcc-web"} == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Aplicacao TCC Web esta offline em {{ \$labels.instance }}"
+echo "Creating /opt/monitoring/rules.yml..."
+cat <<EOF > /opt/monitoring/rules.yml
+${rules_config}
 EOF
 
-# --- alertmanager.yml (sem mudancas) ---
+# Os outros ficheiros (alertmanager, healer, .env, docker-compose)
+# são mais simples e podem continuar a ser criados da mesma forma.
 cat <<'EOF' > /opt/monitoring/alertmanager.yml
 route:
   receiver: 'webhook-healer'
@@ -68,7 +38,6 @@ receivers:
       - url: 'http://healer:5001/webhook'
 EOF
 
-# --- healer.py (sem mudancas) ---
 cat <<'EOF' > /opt/monitoring/healer.py
 from flask import Flask, request, jsonify
 import subprocess, os, logging, threading
@@ -110,14 +79,12 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
 EOF
 
-# --- .env file (sem mudancas) ---
-echo "Creating environment file /opt/monitoring/.env..."
+# Este ficheiro .env já não é estritamente necessário para o Prometheus, mas
+# o Healer ainda precisa dele, por isso mantemo-lo.
 cat <<EOF > /opt/monitoring/.env
 DO_TOKEN=${do_token}
 EOF
 
-# --- docker-compose.yml (sem mudancas) ---
-echo "Creating /opt/monitoring/docker-compose.yml (using Quay.io mirror)..."
 cat <<'EOF' > /opt/monitoring/docker-compose.yml
 version: '3.7'
 services:
@@ -130,7 +97,6 @@ services:
     ports:
       - '9090:9090'
     command: '--config.file=/etc/prometheus/prometheus.yml'
-  
   alertmanager:
     image: quay.io/prometheus/alertmanager:v0.27.0
     restart: always
@@ -139,7 +105,6 @@ services:
     ports:
       - '9093:9093'
     command: '--config.file=/etc/alertmanager/config.yml'
-
   healer:
     image: python:3.11-slim
     restart: always
@@ -147,29 +112,16 @@ services:
       - /opt/monitoring/healer.py:/app/healer.py
       - /opt/terraform_project:/terraform_project
     working_dir: /app
+    # O docker-compose vai ler o .env do mesmo diretorio
     command: sh -c "pip install flask && python healer.py"
 EOF
 
 # --- 3. EXECUTION ---
-echo "Cloning the 'inserting-prometheus' branch from the repository..."
+echo "Cloning repository..."
 git clone -b inserting-prometheus https://github.com/arthur-calado/tcc-autohealing-do.git /opt/terraform_project
-
 echo "Enabling Docker..."
 systemctl enable --now docker
-
-echo "Attempting to start services with Docker Compose (with retries)..."
-max_attempts=5
-attempt_num=1
-until docker-compose -f /opt/monitoring/docker-compose.yml up -d
-do
-    if [ ${attempt_num} -eq ${max_attempts} ]; then
-        echo "Error: Failed to start Docker services after ${max_attempts} attempts."
-        exit 1
-    fi
-    echo "Attempt ${attempt_num} failed. Waiting 30 seconds to retry..."
-    sleep 30
-    attempt_num=$(( attempt_num+1 ))
-done
-
+echo "Starting Docker Compose services..."
+docker-compose -f /opt/monitoring/docker-compose.yml up -d
 echo "Docker services started successfully!"
 echo "--- End of user_data script ---"
