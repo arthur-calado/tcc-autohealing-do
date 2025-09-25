@@ -4,7 +4,7 @@ exec > /var/log/user_data_output.log 2>&1
 
 set -e
 
-echo "--- Starting user_data script (sanitized version) ---"
+echo "--- Starting user_data script (Final version with Prometheus Auth) ---"
 
 # --- 1. INSTALL DEPENDENCIES ---
 echo "Waiting and updating packages..."
@@ -18,7 +18,10 @@ echo "Creating config directory /opt/monitoring..."
 mkdir -p /opt/monitoring
 
 # --- prometheus.yml ---
-cat <<'EOF' > /opt/monitoring/prometheus.yml
+# A MUDANCA CRUCIAL ESTA AQUI:
+echo "Creating /opt/monitoring/prometheus.yml with authentication..."
+# Usamos <<EOF (sem aspas) para permitir a expansao da variavel ${do_token}
+cat <<EOF > /opt/monitoring/prometheus.yml
 global:
   scrape_interval: 15s
 alerting:
@@ -31,16 +34,19 @@ scrape_configs:
   - job_name: 'tcc-web'
     digitalocean_sd_configs:
       - port: 8080
+        # A LINHA QUE CORRIGE TUDO:
+        bearer_token: '${do_token}'
     relabel_configs:
       - source_labels: [__meta_digitalocean_tags]
         regex: '.*,tcc-autohealing-web,.*'
         action: keep
       - source_labels: [__meta_digitalocean_private_ip]
         target_label: __address__
-        replacement: '${1}:8080'
+        # Escapamos o $1 para que seja interpretado pelo Prometheus e nao pelo shell
+        replacement: '\${1}:8080'
 EOF
 
-# --- rules.yml ---
+# --- rules.yml (sem mudancas) ---
 cat <<'EOF' > /opt/monitoring/rules.yml
 groups:
   - name: TCCAlerts
@@ -54,7 +60,7 @@ groups:
           summary: "Aplicacao TCC Web esta offline em {{ $labels.instance }}"
 EOF
 
-# --- alertmanager.yml ---
+# --- alertmanager.yml (sem mudancas) ---
 cat <<'EOF' > /opt/monitoring/alertmanager.yml
 route:
   receiver: 'webhook-healer'
@@ -64,7 +70,7 @@ receivers:
       - url: 'http://healer:5001/webhook'
 EOF
 
-# --- healer.py ---
+# --- healer.py (sem mudancas) ---
 cat <<'EOF' > /opt/monitoring/healer.py
 from flask import Flask, request, jsonify
 import subprocess, os, logging, threading
@@ -106,13 +112,13 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
 EOF
 
-# --- .env file for the token ---
+# --- .env file (sem mudancas) ---
 echo "Creating environment file /opt/monitoring/.env..."
 cat <<EOF > /opt/monitoring/.env
 DO_TOKEN=${do_token}
 EOF
 
-# --- docker-compose.yml using Quay.io mirror ---
+# --- docker-compose.yml (sem mudancas) ---
 echo "Creating /opt/monitoring/docker-compose.yml (using Quay.io mirror)..."
 cat <<'EOF' > /opt/monitoring/docker-compose.yml
 version: '3.7'
@@ -146,7 +152,7 @@ services:
     command: sh -c "pip install flask && python healer.py"
 EOF
 
-# --- 3. EXECUTION ---
+# --- 3. EXECUTION (sem mudancas) ---
 echo "Cloning the 'inserting-prometheus' branch from the repository..."
 git clone -b inserting-prometheus https://github.com/arthur-calado/tcc-autohealing-do.git /opt/terraform_project
 
