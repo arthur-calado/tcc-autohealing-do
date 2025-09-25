@@ -10,5 +10,5 @@ resource "digitalocean_droplet" "monitoring" {
   ssh_keys = var.ssh_keys
 
   # Usamos o script de user_data para provisionar tudo
-  user_data = file("${path.module}/user_data_monitor.sh")
+  user_data = file("${path.module}/user_data_monitor.sh.tftpl")
 } 
