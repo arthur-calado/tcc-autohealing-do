@@ -19,7 +19,8 @@ mkdir -p /opt/monitoring
 
 # --- prometheus.yml ---
 echo "Creating /opt/monitoring/prometheus.yml with authentication..."
-# CORRECAO: Usamos <<EOF (sem aspas) para permitir a expansao da variavel ${do_token}
+# CORRECAO FINAL: Usamos <<EOF (sem aspas) e escapamos o $1 para garantir
+# que apenas a variavel ${do_token} seja expandida pelo shell.
 cat <<EOF > /opt/monitoring/prometheus.yml
 global:
   scrape_interval: 15s
@@ -40,7 +41,6 @@ scrape_configs:
         action: keep
       - source_labels: [__meta_digitalocean_private_ip]
         target_label: __address__
-        # CORRECAO: Escapamos o $1 para que seja interpretado pelo Prometheus e nao pelo shell
         replacement: '\${1}:8080'
 EOF
 
@@ -55,7 +55,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Aplicacao TCC Web esta offline em {{ $labels.instance }}"
+          summary: "Aplicacao TCC Web esta offline em {{ \$labels.instance }}"
 EOF
 
 # --- alertmanager.yml (sem mudancas) ---
