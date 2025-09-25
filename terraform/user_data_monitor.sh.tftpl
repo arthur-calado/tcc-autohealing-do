@@ -55,8 +55,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          # A adicao da barra invertida (\) antes do $ corrige o erro do YAML
-          summary: "Aplicacao TCC Web esta offline em {{ \$labels.instance }}"
+          # A barra invertida (\) foi REMOVIDA. O 'EOF' com aspas já protege o '$'.
+          summary: "Aplicacao TCC Web esta offline em {{ $labels.instance }}"
 EOF
 
 # --- alertmanager.yml ---
