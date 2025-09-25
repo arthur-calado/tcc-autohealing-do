@@ -1,23 +1,23 @@
 #!/bin/bash
-# Redireciona toda a saída (stdout e stderr) para um ficheiro de log para depuração
+# Redireciona toda a saida (stdout e stderr) para um ficheiro de log para depuracao
 exec > /var/log/user_data_output.log 2>&1
 
 set -e
 
-echo "--- Início do script user_data (versão final com mirror do Quay.io) ---"
+echo "--- Starting user_data script (sanitized version) ---"
 
-# --- 1. INSTALAÇÃO DE DEPENDÊNCIAS ---
-echo "A aguardar e a atualizar pacotes..."
+# --- 1. INSTALL DEPENDENCIES ---
+echo "Waiting and updating packages..."
 sleep 15
 apt-get update -y
-echo "A instalar Docker, Docker Compose e Git..."
+echo "Installing Docker, Docker Compose, and Git..."
 apt-get install -y docker.io docker-compose git
 
-# --- 2. CRIAÇÃO DOS FICHEIROS DE CONFIGURAÇÃO ---
-echo "A criar diretório de configuração /opt/monitoring..."
+# --- 2. CREATE CONFIGURATION FILES ---
+echo "Creating config directory /opt/monitoring..."
 mkdir -p /opt/monitoring
 
-# (prometheus.yml, rules.yml, healer.py e .env continuam exatamente iguais)
+# --- prometheus.yml ---
 cat <<'EOF' > /opt/monitoring/prometheus.yml
 global:
   scrape_interval: 15s
@@ -40,6 +40,7 @@ scrape_configs:
         replacement: '${1}:8080'
 EOF
 
+# --- rules.yml ---
 cat <<'EOF' > /opt/monitoring/rules.yml
 groups:
   - name: TCCAlerts
@@ -50,9 +51,10 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Aplicação TCC Web está offline em {{ $labels.instance }}"
+          summary: "Aplicacao TCC Web esta offline em {{ $labels.instance }}"
 EOF
 
+# --- alertmanager.yml ---
 cat <<'EOF' > /opt/monitoring/alertmanager.yml
 route:
   receiver: 'webhook-healer'
@@ -62,6 +64,7 @@ receivers:
       - url: 'http://healer:5001/webhook'
 EOF
 
+# --- healer.py ---
 cat <<'EOF' > /opt/monitoring/healer.py
 from flask import Flask, request, jsonify
 import subprocess, os, logging, threading
@@ -72,10 +75,10 @@ WEB_COUNT = int(os.getenv("WEB_COUNT", "2"))
 HEALING_IN_PROGRESS = threading.Lock()
 def trigger_terraform_recreation():
     if not HEALING_IN_PROGRESS.acquire(blocking=False):
-        app.logger.warning("Processo de healing já em andamento.")
+        app.logger.warning("Healing process already in progress.")
         return
     try:
-        app.logger.info("A iniciar recriação dos droplets.")
+        app.logger.info("Starting droplet recreation.")
         replace_args = []
         for i in range(WEB_COUNT):
             replace_args.extend(["-replace", f"digitalocean_droplet.web[{i}]"])
@@ -85,17 +88,17 @@ def trigger_terraform_recreation():
             cmd, cwd=TERRAFORM_DIR, capture_output=True,
             text=True, check=True, env=env
         )
-        app.logger.info(f"Terraform executado: {proc.stdout}")
+        app.logger.info(f"Terraform executed: {proc.stdout}")
     except subprocess.CalledProcessError as e:
-        app.logger.error(f"Falha no Terraform: {e.stderr}")
+        app.logger.error(f"Terraform failed: {e.stderr}")
     except Exception as e:
-        app.logger.error(f"Erro inesperado: {e}")
+        app.logger.error(f"Unexpected error: {e}")
     finally:
         HEALING_IN_PROGRESS.release()
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
-    app.logger.info(f"Webhook recebido: {data.get('status')}")
+    app.logger.info(f"Webhook received: {data.get('status')}")
     if data.get('status') == 'firing':
         threading.Thread(target=trigger_terraform_recreation).start()
     return jsonify({"status": "received"}), 200
@@ -103,18 +106,18 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
 EOF
 
-echo "A criar o ficheiro de ambiente /opt/monitoring/.env..."
+# --- .env file for the token ---
+echo "Creating environment file /opt/monitoring/.env..."
 cat <<EOF > /opt/monitoring/.env
 DO_TOKEN=${do_token}
 EOF
 
-# AQUI ESTÁ A MUDANÇA CRÍTICA:
-echo "A criar /opt/monitoring/docker-compose.yml (usando o mirror Quay.io)..."
+# --- docker-compose.yml using Quay.io mirror ---
+echo "Creating /opt/monitoring/docker-compose.yml (using Quay.io mirror)..."
 cat <<'EOF' > /opt/monitoring/docker-compose.yml
 version: '3.7'
 services:
   prometheus:
-    # MUDANÇA: Usando o repositório Quay.io em vez do Docker Hub
     image: quay.io/prometheus/prometheus:v2.51.2
     restart: always
     volumes:
@@ -125,7 +128,6 @@ services:
     command: '--config.file=/etc/prometheus/prometheus.yml'
   
   alertmanager:
-    # MUDANÇA: Usando o repositório Quay.io em vez do Docker Hub
     image: quay.io/prometheus/alertmanager:v0.27.0
     restart: always
     volumes:
@@ -144,27 +146,26 @@ services:
     command: sh -c "pip install flask && python healer.py"
 EOF
 
-# --- 3. EXECUÇÃO DOS SERVIÇOS ---
-echo "A clonar a branch 'inserting-prometheus' do repositório..."
+# --- 3. EXECUTION ---
+echo "Cloning the 'inserting-prometheus' branch from the repository..."
 git clone -b inserting-prometheus https://github.com/arthur-calado/tcc-autohealing-do.git /opt/terraform_project
 
-echo "A ativar o Docker..."
+echo "Enabling Docker..."
 systemctl enable --now docker
 
-# O loop de retentativa continua a ser uma boa prática
-echo "A tentar iniciar os serviços com o Docker Compose (com retentativas)..."
+echo "Attempting to start services with Docker Compose (with retries)..."
 max_attempts=5
 attempt_num=1
 until docker-compose -f /opt/monitoring/docker-compose.yml up -d
 do
     if [ ${attempt_num} -eq ${max_attempts} ]; then
-        echo "Erro: Falha ao iniciar os serviços Docker após ${max_attempts} tentativas."
+        echo "Error: Failed to start Docker services after ${max_attempts} attempts."
         exit 1
     fi
-    echo "Tentativa ${attempt_num} falhou. A aguardar 30 segundos para tentar novamente..."
+    echo "Attempt ${attempt_num} failed. Waiting 30 seconds to retry..."
     sleep 30
     attempt_num=$(( attempt_num+1 ))
 done
 
-echo "Serviços Docker iniciados com sucesso!"
-echo "--- Fim do script user_data ---"
+echo "Docker services started successfully!"
+echo "--- End of user_data script ---"
