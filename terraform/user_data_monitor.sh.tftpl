@@ -4,7 +4,7 @@ exec > /var/log/user_data_output.log 2>&1
 
 set -e
 
-echo "--- Starting user_data script (Final version with Prometheus Auth) ---"
+echo "--- Starting user_data script (Final version with correct token injection) ---"
 
 # --- 1. INSTALL DEPENDENCIES ---
 echo "Waiting and updating packages..."
@@ -18,9 +18,8 @@ echo "Creating config directory /opt/monitoring..."
 mkdir -p /opt/monitoring
 
 # --- prometheus.yml ---
-# A MUDANCA CRUCIAL ESTA AQUI:
 echo "Creating /opt/monitoring/prometheus.yml with authentication..."
-# Usamos <<EOF (sem aspas) para permitir a expansao da variavel ${do_token}
+# CORRECAO: Usamos <<EOF (sem aspas) para permitir a expansao da variavel ${do_token}
 cat <<EOF > /opt/monitoring/prometheus.yml
 global:
   scrape_interval: 15s
@@ -34,7 +33,6 @@ scrape_configs:
   - job_name: 'tcc-web'
     digitalocean_sd_configs:
       - port: 8080
-        # A LINHA QUE CORRIGE TUDO:
         bearer_token: '${do_token}'
     relabel_configs:
       - source_labels: [__meta_digitalocean_tags]
@@ -42,7 +40,7 @@ scrape_configs:
         action: keep
       - source_labels: [__meta_digitalocean_private_ip]
         target_label: __address__
-        # Escapamos o $1 para que seja interpretado pelo Prometheus e nao pelo shell
+        # CORRECAO: Escapamos o $1 para que seja interpretado pelo Prometheus e nao pelo shell
         replacement: '\${1}:8080'
 EOF
 
@@ -152,7 +150,7 @@ services:
     command: sh -c "pip install flask && python healer.py"
 EOF
 
-# --- 3. EXECUTION (sem mudancas) ---
+# --- 3. EXECUTION ---
 echo "Cloning the 'inserting-prometheus' branch from the repository..."
 git clone -b inserting-prometheus https://github.com/arthur-calado/tcc-autohealing-do.git /opt/terraform_project
 
