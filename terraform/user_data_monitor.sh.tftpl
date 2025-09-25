@@ -4,7 +4,7 @@ exec > /var/log/user_data_output.log 2>&1
 
 set -e
 
-echo "--- Início do script user_data (versão final robusta) ---"
+echo "--- Início do script user_data (versão final com mirror do Quay.io) ---"
 
 # --- 1. INSTALAÇÃO DE DEPENDÊNCIAS ---
 echo "A aguardar e a atualizar pacotes..."
@@ -17,7 +17,7 @@ apt-get install -y docker.io docker-compose git
 echo "A criar diretório de configuração /opt/monitoring..."
 mkdir -p /opt/monitoring
 
-# (Os ficheiros prometheus.yml, rules.yml, e healer.py continuam iguais)
+# (prometheus.yml, rules.yml, healer.py e .env continuam exatamente iguais)
 cat <<'EOF' > /opt/monitoring/prometheus.yml
 global:
   scrape_interval: 15s
@@ -103,20 +103,19 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
 EOF
 
-# CORREÇÃO 1: Usar um ficheiro .env para o token
 echo "A criar o ficheiro de ambiente /opt/monitoring/.env..."
 cat <<EOF > /opt/monitoring/.env
 DO_TOKEN=${do_token}
 EOF
 
-# Modificamos o docker-compose.yml para NÃO ter a secção 'environment' no healer
-# Ele vai ler o ficheiro .env automaticamente
-echo "A criar /opt/monitoring/docker-compose.yml..."
+# AQUI ESTÁ A MUDANÇA CRÍTICA:
+echo "A criar /opt/monitoring/docker-compose.yml (usando o mirror Quay.io)..."
 cat <<'EOF' > /opt/monitoring/docker-compose.yml
 version: '3.7'
 services:
   prometheus:
-    image: prom/prometheus:v2.51.2
+    # MUDANÇA: Usando o repositório Quay.io em vez do Docker Hub
+    image: quay.io/prometheus/prometheus:v2.51.2
     restart: always
     volumes:
       - /opt/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -126,7 +125,8 @@ services:
     command: '--config.file=/etc/prometheus/prometheus.yml'
   
   alertmanager:
-    image: prom/alertmanager:v0.27.0
+    # MUDANÇA: Usando o repositório Quay.io em vez do Docker Hub
+    image: quay.io/prometheus/alertmanager:v0.27.0
     restart: always
     volumes:
       - /opt/monitoring/alertmanager.yml:/etc/alertmanager/config.yml
@@ -141,7 +141,6 @@ services:
       - /opt/monitoring/healer.py:/app/healer.py
       - /opt/terraform_project:/terraform_project
     working_dir: /app
-    # A variável de ambiente agora é lida do ficheiro .env
     command: sh -c "pip install flask && python healer.py"
 EOF
 
@@ -152,7 +151,7 @@ git clone -b inserting-prometheus https://github.com/arthur-calado/tcc-autoheali
 echo "A ativar o Docker..."
 systemctl enable --now docker
 
-# CORREÇÃO 2: Loop de retentativa para o docker-compose
+# O loop de retentativa continua a ser uma boa prática
 echo "A tentar iniciar os serviços com o Docker Compose (com retentativas)..."
 max_attempts=5
 attempt_num=1
