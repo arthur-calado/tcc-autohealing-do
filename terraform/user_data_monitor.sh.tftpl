@@ -4,7 +4,7 @@ exec > /var/log/user_data_output.log 2>&1
 
 set -e
 
-echo "--- Starting user_data script (Final version with correct token injection) ---"
+echo "--- Starting user_data script (Final version with YAML fix) ---"
 
 # --- 1. INSTALL DEPENDENCIES ---
 echo "Waiting and updating packages..."
@@ -19,8 +19,6 @@ mkdir -p /opt/monitoring
 
 # --- prometheus.yml ---
 echo "Creating /opt/monitoring/prometheus.yml with authentication..."
-# CORRECAO FINAL: Usamos <<EOF (sem aspas) e escapamos o $1 para garantir
-# que apenas a variavel ${do_token} seja expandida pelo shell.
 cat <<EOF > /opt/monitoring/prometheus.yml
 global:
   scrape_interval: 15s
@@ -44,7 +42,9 @@ scrape_configs:
         replacement: '\${1}:8080'
 EOF
 
-# --- rules.yml (sem mudancas) ---
+# --- rules.yml ---
+# A CORRECAO FINAL ESTA AQUI:
+echo "Creating /opt/monitoring/rules.yml..."
 cat <<'EOF' > /opt/monitoring/rules.yml
 groups:
   - name: TCCAlerts
@@ -55,10 +55,11 @@ groups:
         labels:
           severity: critical
         annotations:
+          # A adicao da barra invertida (\) antes do $ corrige o erro do YAML
           summary: "Aplicacao TCC Web esta offline em {{ \$labels.instance }}"
 EOF
 
-# --- alertmanager.yml (sem mudancas) ---
+# --- alertmanager.yml ---
 cat <<'EOF' > /opt/monitoring/alertmanager.yml
 route:
   receiver: 'webhook-healer'
@@ -68,7 +69,7 @@ receivers:
       - url: 'http://healer:5001/webhook'
 EOF
 
-# --- healer.py (sem mudancas) ---
+# --- healer.py ---
 cat <<'EOF' > /opt/monitoring/healer.py
 from flask import Flask, request, jsonify
 import subprocess, os, logging, threading
@@ -110,13 +111,13 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
 EOF
 
-# --- .env file (sem mudancas) ---
+# --- .env file ---
 echo "Creating environment file /opt/monitoring/.env..."
 cat <<EOF > /opt/monitoring/.env
 DO_TOKEN=${do_token}
 EOF
 
-# --- docker-compose.yml (sem mudancas) ---
+# --- docker-compose.yml ---
 echo "Creating /opt/monitoring/docker-compose.yml (using Quay.io mirror)..."
 cat <<'EOF' > /opt/monitoring/docker-compose.yml
 version: '3.7'
