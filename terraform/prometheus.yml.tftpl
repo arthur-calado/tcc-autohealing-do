@@ -1,3 +1,5 @@
+# terraform/prometheus.yml.tftpl
+
 global:
   scrape_interval: 15s
 alerting:
@@ -15,6 +17,12 @@ scrape_configs:
       - source_labels: [__meta_digitalocean_tags]
         regex: '.*,tcc-autohealing-web,.*'
         action: keep
+      
+      # AQUI ESTA A CORRECAO FINAL:
       - source_labels: [__meta_digitalocean_private_ip]
+        # 1. Capturamos o IP inteiro com esta expressao regular
+        regex: '(.*)'
+        # 2. O alvo continua a ser o endereco final
         target_label: __address__
+        # 3. Agora, o ${1} contem o IP correto para construir o endereco
         replacement: '${1}:8080'
